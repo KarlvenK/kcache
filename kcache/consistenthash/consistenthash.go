@@ -32,7 +32,7 @@ func New(replicas int, fn Hash) *Map {
 	return m
 }
 
-//Add adds some keys to the hash
+//Add adds some keys to the hash  //添加真实节点/机器
 func (m *Map) Add(keys ...string) {
 	for _, key := range keys {
 		for i := 0; i < m.replicas; i++ {
@@ -44,7 +44,7 @@ func (m *Map) Add(keys ...string) {
 	sort.Ints(m.keys)
 }
 
-//Get gets the closest item in the hash to the provided key
+//Get gets the closest item in the hash to the provided key//选择节点
 func (m *Map) Get(key string) string {
 	if len(m.keys) == 0 {
 		return ""
@@ -56,3 +56,8 @@ func (m *Map) Get(key string) string {
 	})
 	return m.hashMap[m.keys[index%len(m.keys)]]
 }
+
+/*
+Add 的key和 Get的key 不是同一个东西
+Add的是节点，Get的是节点要去找的数据的key
+*/
