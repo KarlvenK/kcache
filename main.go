@@ -1,6 +1,14 @@
 package main
 
+/*
+$ curl "http://localhost:9999/api?key=Tom"
+630
+$ curl "http://localhost:9999/api?key=kkk"
+kkk not exist
+*/
+
 import (
+	"flag"
 	"fmt"
 	"github.com/KarlvenK/kcache"
 	"log"
@@ -8,13 +16,13 @@ import (
 )
 
 var db = map[string]string{
-	"Tom":  "1",
-	"Jack": "2",
-	"Sam":  "3",
+	"Tom":  "630",
+	"Jack": "589",
+	"Sam":  "567",
 }
 
-func main() {
-	kcache.NewGroup("int", 2<<10, kcache.GetterFunc(
+func createGroup() *kcache.Group {
+	return kcache.NewGroup("scores", 2<<10, kcache.GetterFunc(
 		func(key string) ([]byte, error) {
 			log.Println("[SlowDB] search key", key)
 			if v, ok := db[key]; ok {
@@ -22,9 +30,56 @@ func main() {
 			}
 			return nil, fmt.Errorf("%s not exist", key)
 		}))
+}
 
-	addr := "localhost:9999"
+func startCacheServer(addr string, addrs []string, gee *kcache.Group) {
 	peers := kcache.NewHTTPPool(addr)
+	peers.Set(addrs...)
+	gee.RegisterPeers(peers)
 	log.Println("kcache is running at", addr)
-	log.Fatal(http.ListenAndServe(addr, peers))
+	log.Fatal(http.ListenAndServe(addr[7:], peers))
+}
+
+func startAPIServer(apiAddr string, gee *kcache.Group) {
+	http.Handle("/api", http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			key := r.URL.Query().Get("key")
+			view, err := gee.Get(key)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Write(view.ByteSlice())
+
+		}))
+	log.Println("fontend server is running at", apiAddr)
+	log.Fatal(http.ListenAndServe(apiAddr[7:], nil))
+
+}
+
+func main() {
+	var port int
+	var api bool
+	flag.IntVar(&port, "port", 8001, "kcache server port")
+	flag.BoolVar(&api, "api", false, "Start a api server?")
+	flag.Parse()
+
+	apiAddr := "http://localhost:9999"
+	addrMap := map[int]string{
+		8001: "http://localhost:8001",
+		8002: "http://localhost:8002",
+		8003: "http://localhost:8003",
+	}
+
+	var addrs []string
+	for _, v := range addrMap {
+		addrs = append(addrs, v)
+	}
+
+	gee := createGroup()
+	if api {
+		go startAPIServer(apiAddr, gee)
+	}
+	startCacheServer(addrMap[port], addrs, gee)
 }
